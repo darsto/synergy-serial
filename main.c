@@ -6,6 +6,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <sys/socket.h>
+#include <errno.h>
 
 #include "synergy_proto.h"
 #include "common.h"
@@ -18,7 +19,9 @@ main(int argc, char *argv[])
 	int fd;
 	struct sockaddr_in saddr_in;
 	char buf[2000];
+	char *bufptr;
 	int rc;
+	unsigned buflen;
 
 	// Create socket
 	fd = socket(AF_INET, SOCK_STREAM, 0);
@@ -52,24 +55,45 @@ main(int argc, char *argv[])
 
 	uint32_t len = ntohl(*(uint32_t *)buf);
 	if (len + 4 != rc) {
-		LOG(LOG_ERROR, "recv malformed/incomplete packet");
+		LOG(LOG_ERROR, "recv malformed/incomplete greeting packet");
 		return 1;
 	}
 
-	rc = synergy_proto_handle_greeting(&g_conn, buf + 4, len);
+	g_conn.recv_buf = buf + 4;
+	g_conn.recv_len = len;
+	rc = synergy_proto_handle_greeting(&g_conn);
 	if (rc < 0) {
 		LOG(LOG_ERROR, "synergy_proto_handle_greeting() returned %d", rc);
 		return 1;
 	}
 
-	LOG(LOG_INFO, "recv: (%d) packetlen=%d %s", rc, len, buf);
-	return 0;
+	while (1) {
+		rc = recv(fd, buf, sizeof(buf), 0);
+		if (rc < 0) {
+			LOG(LOG_ERROR, "recv: %d", rc);
+			return 1;
+		}
 
-	// Send some data
-	//  rc = send(socket_desc, message, strlen(message), 0);
-	if (rc < 0) {
-		puts("Send failed");
-		return 1;
+		bufptr = buf;
+		buflen = rc;
+		while (buflen > 8) {
+			uint32_t len = ntohl(*(uint32_t *)bufptr);
+			if (len > buflen) {
+				LOG(LOG_ERROR, "recv incomplete packet: pktlen=%d, buflen=%d", len, rc);
+				return 1;
+			}
+
+			g_conn.recv_buf = bufptr;
+			g_conn.recv_len = len;
+			rc = synergy_handle_pkt(&g_conn);
+			if (rc < 0) {
+				LOG(LOG_ERROR, "synergy_handle_pkt() returned %d", rc);
+				return 1;
+			}
+
+			bufptr += len;
+			buflen -= len;
+		}
 	}
 
 	return 0;
