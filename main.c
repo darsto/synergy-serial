@@ -38,7 +38,11 @@ main(int argc, char *argv[])
 {
 	int fd;
 	struct sockaddr_in saddr_in = {};
-	char buf[4096];
+	struct pkt_buf {
+		char prev[2048];
+		char cur[2048];
+	} pkt_buf;
+	int prevlen = 0;
 	char *bufptr;
 	int rc;
 	unsigned buflen;
@@ -71,7 +75,7 @@ main(int argc, char *argv[])
 	g_conn.fd = fd;
 	LOG(LOG_INFO, "connected");
 
-	rc = recv(fd, buf, sizeof(buf), 0);
+	rc = recv(fd, pkt_buf.cur, sizeof(pkt_buf.cur), 0);
 	if (rc < 0) {
 		LOG(LOG_ERROR, "recv: %d", rc);
 		return 1;
@@ -82,13 +86,13 @@ main(int argc, char *argv[])
 		return 1;
 	}
 
-	uint32_t len = ntohl(*(uint32_t *)buf);
+	uint32_t len = ntohl(*(uint32_t *)pkt_buf.cur);
 	if (len + 4 != rc) {
 		LOG(LOG_ERROR, "recv malformed/incomplete greeting packet");
 		return 1;
 	}
 
-	g_conn.recv_buf = buf + 4;
+	g_conn.recv_buf = pkt_buf.cur + 4;
 	g_conn.recv_len = len;
 	rc = synergy_proto_handle_greeting(&g_conn);
 	if (rc < 0) {
@@ -110,19 +114,44 @@ main(int argc, char *argv[])
 		if (pfds[0].revents & POLLIN) {
 			pfds[0].revents &= ~POLLIN;
 
-			rc = recv(fd, buf, sizeof(buf), 0);
+			rc = recv(fd, pkt_buf.cur, sizeof(pkt_buf.cur), 0);
 			if (rc < 0) {
 				LOG(LOG_ERROR, "recv returned %d, errno=%d", rc, errno);
 				return 1;
 			}
 
-			bufptr = buf;
+			bufptr = pkt_buf.cur;
 			buflen = rc;
-			while (buflen >= 8) {
+
+			if (prevlen > 0) {
+				bufptr = pkt_buf.prev + sizeof(pkt_buf.prev) - prevlen;
+				buflen += prevlen;
+				prevlen = 0;
+			}
+
+			while (buflen >= 0) {
+				if (buflen < 4) {
+					memcpy(pkt_buf.prev + sizeof(pkt_buf.prev) - buflen, bufptr, buflen);
+					prevlen = buflen;
+					break;
+				}
+
 				uint32_t len = ntohl(*(uint32_t *)bufptr);
-				if (len + 4 > buflen) {
+				if (len + 4 >= 2048) {
+					/* we certainly screwed up somewhere */
 					LOG(LOG_ERROR, "recv incomplete packet: pktlen=%d, buflen=%d", len, rc);
 					return 1;
+				}
+
+				if (len + 4 > buflen) {
+					if (bufptr < pkt_buf.cur) {
+						LOG(LOG_ERROR, "recv too fragmented packet. expected len=%d, two packets len=%d", len, buflen);
+						return 1;
+					}
+
+					memcpy(pkt_buf.prev + sizeof(pkt_buf.prev) - buflen, bufptr, buflen);
+					prevlen = buflen;
+					break;
 				}
 
 				g_conn.recv_buf = bufptr + 4;
