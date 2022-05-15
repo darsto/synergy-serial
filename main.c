@@ -10,8 +10,26 @@
 
 #include "synergy_proto.h"
 #include "common.h"
+#include "serial.h"
 
 struct synergy_proto_conn g_conn = {};
+
+static int
+open_serial(const char *devpath, int baudrate)
+{
+    int fd = open(devpath, O_RDWR | O_NOCTTY | O_SYNC);
+    if (fd < 0)
+    {
+        int rc = errno;
+        fprintf(stderr, "error %d opening %s: %s\n", errno, devpath, strerror(rc));
+        return -rc;
+    }
+
+    serial_set_interface_attribs(fd, baudrate, 0);  // set speed to 115,200 bps, 8n1 (no parity)
+    serial_set_blocking(fd, 1);                // set blocking
+
+    return fd;
+}
 
 int
 main(int argc, char *argv[])
@@ -22,6 +40,14 @@ main(int argc, char *argv[])
 	char *bufptr;
 	int rc;
 	unsigned buflen;
+
+#if 0
+	fd = open_serial("/dev/ttyUSB2", B115200);
+	write(fd, "hello!\n", 7);  // send 7 character greeting
+	usleep((7 + 25) * 100);	   // sleep enough to transmit the 7 plus
+
+	return 0;
+#endif
 
 	// Create socket
 	fd = socket(AF_INET, SOCK_STREAM, 0);
