@@ -4,33 +4,36 @@
 
 #include <arpa/inet.h>
 #include <stdio.h>
+#include <stdbool.h>
+#include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
 #include <sys/poll.h>
 #include <errno.h>
 #include <netinet/tcp.h>
+#include <getopt.h>
 
 #include "synergy_proto.h"
 #include "common.h"
 #include "serial.h"
 
-struct synergy_proto_conn g_conn = {};
+static struct synergy_proto_conn g_conn = {};
+static struct {
+	const char *serial_devpath;
+	int baudrate;
+} g_args;
 
-static int
-open_serial(const char *devpath, int baudrate)
+static struct option g_options[] = {
+	{ "help", no_argument, NULL, 'h' },
+	{ "baudrate", required_argument, NULL, 'b' },
+	{ "device", required_argument, NULL, 'd' },
+	{ 0, 0, 0, 0 },
+};
+
+static void
+print_help(const char *argv0)
 {
-    int fd = open(devpath, O_RDWR | O_NOCTTY | O_SYNC);
-    if (fd < 0)
-    {
-        int rc = errno;
-        fprintf(stderr, "error %d opening %s: %s\n", errno, devpath, strerror(rc));
-        return -rc;
-    }
-
-    serial_set_interface_attribs(fd, baudrate, 0);  // set speed to 115,200 bps, 8n1 (no parity)
-    serial_set_blocking(fd, 1);                // set blocking
-
-    return fd;
+	fprintf(stderr, "%s -d /path/to/serialdev -b baudrate\n", argv0);
 }
 
 int
@@ -47,15 +50,92 @@ main(int argc, char *argv[])
 	int rc;
 	unsigned buflen;
 
-#if 0
-	fd = open_serial("/dev/ttyUSB2", B115200);
-	write(fd, "hello!\n", 7);  // send 7 character greeting
-	usleep((7 + 25) * 100);	   // sleep enough to transmit the 7 plus
+	while (1) {
+		int opt_index = 0;
+		char c;
 
-	return 0;
+		c = getopt_long(argc, argv, "hb:d:", g_options, &opt_index);
+		if (c == -1) {
+			break;
+		}
+
+		switch (c) {
+			case 0: {
+				struct option *opt = &g_options[opt_index];
+				if (opt->flag != NULL) {
+					break;
+				}
+
+				if (optarg) {
+					// todo
+				}
+				break;
+			}
+			case 'h':
+				print_help(argv[0]);
+				return 0;
+			case 'd':
+				g_args.serial_devpath = optarg;
+				break;
+			case 'b':
+				g_args.baudrate = atoi(optarg);
+				break;
+			case '?':
+				break;
+			default:
+				break;
+		}
+	}
+
+	if (!g_args.serial_devpath || !g_args.baudrate) {
+		print_help(argv[0]);
+		return 1;
+	}
+
+#define BAUDRATE(rate) case rate: g_args.baudrate = B ## rate; break
+
+	switch (g_args.baudrate) {
+		BAUDRATE(57600);
+		BAUDRATE(115200);
+		BAUDRATE(230400);
+		BAUDRATE(460800);
+		BAUDRATE(500000);
+		BAUDRATE(576000);
+		BAUDRATE(921600);
+		BAUDRATE(1000000);
+		BAUDRATE(1152000);
+		BAUDRATE(2000000);
+		BAUDRATE(2500000);
+		BAUDRATE(3000000);
+		BAUDRATE(3500000);
+		BAUDRATE(4000000);
+		default:
+			g_args.baudrate = 0;
+			break;
+	}
+
+#undef BAUDRATE
+
+	if (!g_args.baudrate) {
+		LOG(LOG_ERROR, "Invalid baudrate. Only a few are supported. See the code for details.");
+		return 1;
+	}
+
+#if 0
+	int serialfd;
+
+	serialfd = open(g_args.serial_devpath, O_RDWR | O_NOCTTY | O_SYNC);
+    if (serialfd < 0) {
+        LOG(LOG_ERROR, "Can't open serial device at \"%s\": %s\n", errno, "/dev/ttyUSB2", strerror(errno));
+        return 1;
+    }
+
+	serial_set_fd(serialfd);
+    serial_set_interface_attribs(g_args.baudrate, 0);  // set baudrate, 8n1 (no parity)
+    serial_set_blocking(1); // set blocking
+
 #endif
 
-	// Create socket
 	fd = socket(AF_INET, SOCK_STREAM, IPPROTO_IP);
 	if (fd == -1) {
 		LOG(LOG_ERROR, "Could not create socket");
@@ -75,7 +155,7 @@ main(int argc, char *argv[])
 	g_conn.fd = fd;
 	LOG(LOG_INFO, "connected");
 
-	rc = recv(fd, pkt_buf.cur, sizeof(pkt_buf.cur), 0);
+	rc = recv(g_conn.fd, pkt_buf.cur, sizeof(pkt_buf.cur), 0);
 	if (rc < 0) {
 		LOG(LOG_ERROR, "recv: %d", rc);
 		return 1;
