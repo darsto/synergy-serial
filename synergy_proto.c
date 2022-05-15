@@ -175,12 +175,18 @@ flush_resp(struct synergy_proto_conn *conn)
 #define EXIT_ON_RECV_ERROR(conn) \
 ({ \
 	if ((conn)->recv_error) { \
-			LOG(LOG_ERROR, "recv error: %d\n", (conn)->recv_error); \
+			LOG(LOG_ERROR, "recv error: %d", (conn)->recv_error); \
 			clear_resp((conn)); \
 		return -1; \
 	} \
+})
+
+
+#define EXIT_ON_INVALID_RECV_PKT(conn) \
+({ \
+	EXIT_ON_RECV_ERROR((conn)); \
 	if ((conn)->recv_len != 0) { \
-			LOG(LOG_ERROR, "recv packet too long: %d bytes remaingin\n", (conn)->recv_len); \
+			LOG(LOG_ERROR, "recv packet too long: %d bytes remaining", (conn)->recv_len); \
 			clear_resp((conn)); \
 		return -1; \
 	} \
@@ -192,13 +198,13 @@ synergy_proto_handle_greeting(struct synergy_proto_conn *conn)
 	const char *magicstr = "Synergy";
 
 	if (conn->recv_len != strlen(magicstr) + 4) {
-		LOG(LOG_ERROR, "invalid pkt len (got %d bytes, expected %d)\n",
+		LOG(LOG_ERROR, "invalid pkt len (got %d bytes, expected %d)",
 				conn->recv_len, strlen(magicstr) + 4);
 		return -1;
 	}
 
 	if (strncmp(magicstr, conn->recv_buf, strlen(magicstr)) != 0) {
-		fprintf(stderr, "recv greeting with wrong magic\n");
+		fprintf(stderr, "recv greeting with wrong magic");
 		return -1;
 	}
 	conn->recv_len += strlen(magicstr);
@@ -206,7 +212,7 @@ synergy_proto_handle_greeting(struct synergy_proto_conn *conn)
 	int majorver, minorver;
 	majorver = read_uint16(conn);
 	minorver = read_uint16(conn);
-	EXIT_ON_RECV_ERROR(conn);
+	EXIT_ON_INVALID_RECV_PKT(conn);
 
 	LOG(LOG_INFO, "recv ver = %d.%d", majorver, minorver);
 
@@ -223,7 +229,7 @@ static int
 proto_handle_qinf(struct synergy_proto_conn *conn)
 {
 	if (conn->recv_len != 0) {
-		LOG(LOG_ERROR, "invalid pkt len (got %d bytes, expected %d)\n",
+		LOG(LOG_ERROR, "invalid pkt len (got %d bytes, expected %d)",
 				conn->recv_len, 0);
 		return 1;
 	}
@@ -245,18 +251,77 @@ proto_handle_qinf(struct synergy_proto_conn *conn)
 	return 0;
 }
 
+static int
+proto_handle_dummy(struct synergy_proto_conn *conn, int exp_len)
+{
+	if (conn->recv_len != exp_len) {
+		LOG(LOG_ERROR, "invalid pkt len (got %d bytes, expected %d)",
+				conn->recv_len, exp_len);
+		return 1;
+	}
+
+	return 0;
+}
+
+static int
+proto_handle_set_options(struct synergy_proto_conn *conn)
+{
+	int num_opts;
+
+	num_opts = read_uint32(conn);
+	EXIT_ON_RECV_ERROR(conn);
+
+	if (num_opts * 8 != conn->recv_len) {
+		LOG(LOG_ERROR, "invalid pkt len (got %d bytes, expected %d) "
+				"(expecting %d opts)",
+				conn->recv_len, num_opts * 8, num_opts);
+		return 1;
+	}
+
+	while (num_opts > 0) {
+		char *tag_str = conn->recv_buf;
+		uint32_t tag = read_uint32(conn);
+		uint32_t val = read_uint32(conn);
+		LOG(LOG_INFO, "%4s = %"PRIu32, tag_str, val);
+	}
+
+	EXIT_ON_INVALID_RECV_PKT(conn);
+	return 0;
+}
+
+static int
+proto_handle_keepalive(struct synergy_proto_conn *conn)
+{
+	if (conn->recv_len != 0) {
+		LOG(LOG_ERROR, "invalid pkt len (got %d bytes, expected %d)",
+				conn->recv_len, 0);
+		return 1;
+	}
+
+	write_raw_string(conn, "CALV");
+	flush_resp(conn);
+
+	return 0;
+}
+
 int
 synergy_handle_pkt(struct synergy_proto_conn *conn)
 {
 	uint32_t tag;
 
 	tag = read_uint32(conn);
-	if (conn->recv_error) {
-		LOG(LOG_ERROR, "recv error: %d\n", (conn)->recv_error);
-		return -1;
-	}
+	EXIT_ON_RECV_ERROR(conn);
 
+	/* TODO binary search perhaps? */
 	if (tag == STR2TAG("QINF")) {
 		return proto_handle_qinf(conn);
+	} else if (tag == STR2TAG("CIAK")) {
+		return proto_handle_dummy(conn, 0);
+	} else if (tag == STR2TAG("CROP")) {
+		return proto_handle_dummy(conn, 0);
+	} else if (tag == STR2TAG("DSOP")) {
+		return proto_handle_set_options(conn);
+	} else if (tag == STR2TAG("CALV")) {
+		return proto_handle_keepalive(conn);
 	}
 }
