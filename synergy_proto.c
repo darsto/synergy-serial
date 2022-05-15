@@ -14,6 +14,7 @@
 #include "synergy_proto.h"
 #include "common.h"
 #include "config.h"
+#include "serial.h"
 
 #define STR2TAG(str) \
 	((uint32_t)(((str)[0] << 24) | ((str)[1] << 16) | ((str)[2] << 8) | ((str)[3])))
@@ -364,6 +365,65 @@ proto_handle_clipboard_sync(struct synergy_proto_conn *conn)
 	return 0;
 }
 
+static int
+proto_handle_mouse_move(struct synergy_proto_conn *conn)
+{
+	uint16_t abs_x = read_uint16(conn);
+	uint16_t abs_y = read_uint16(conn);
+	EXIT_ON_INVALID_RECV_PKT(conn);
+
+	LOG(LOG_INFO, "mouse move to (%u,%u)", abs_x, abs_y);
+
+	int16_t x_delta, y_delta;
+	x_delta = abs_x - conn->mouse_x;
+	y_delta = abs_y - conn->mouse_y;
+
+	if (x_delta * x_delta + y_delta * y_delta <
+			CONFIG_MOUSE_SYNC_MARGIN * CONFIG_MOUSE_SYNC_MARGIN) {
+		serial_ard_set_mouse_pos(abs_x, abs_y);
+	} else {
+		serial_ard_mouse_move(x_delta, y_delta);
+	}
+
+	conn->mouse_x = abs_x;
+	conn->mouse_y = abs_y;
+
+	return 0;
+}
+
+static int
+proto_handle_rel_mouse_move(struct synergy_proto_conn *conn)
+{
+	int16_t x_delta = read_uint16(conn);
+	int16_t y_delta = read_uint16(conn);
+	EXIT_ON_INVALID_RECV_PKT(conn);
+
+	LOG(LOG_INFO, "rel mouse move (%d,%d)", x_delta, y_delta);
+
+	serial_ard_mouse_move(x_delta, y_delta);
+
+	if (x_delta < conn->mouse_x) {
+		x_delta = conn->mouse_x;
+	}
+
+	if (y_delta < conn->mouse_y) {
+		y_delta = conn->mouse_y;
+	}
+
+	if (conn->mouse_x + x_delta >= CONFIG_SCREENW) {
+		x_delta = CONFIG_SCREENW - conn->mouse_x - 1;
+	}
+
+	if (conn->mouse_x + x_delta >= CONFIG_SCREENH) {
+		y_delta = CONFIG_SCREENH - conn->mouse_y - 1;
+	}
+
+	conn->mouse_x += x_delta;
+	conn->mouse_y += y_delta;
+
+	return 0;
+}
+
 int
 synergy_handle_pkt(struct synergy_proto_conn *conn)
 {
@@ -387,6 +447,12 @@ synergy_handle_pkt(struct synergy_proto_conn *conn)
 		return proto_handle_screen_enter(conn);
 	} else if (tag == STR2TAG("DCLP")) {
 		return proto_handle_clipboard_sync(conn);
+	} else if (tag == STR2TAG("COUT")) {
+		return proto_handle_dummy(conn, 0);
+	} else if (tag == STR2TAG("DMMV")) {
+		return proto_handle_mouse_move(conn);
+	} else if (tag == STR2TAG("DMRM")) {
+		return proto_handle_rel_mouse_move(conn);
 	}
 
 	LOG(LOG_INFO, "unknown pkt: %.4s (%d)", conn->recv_buf - 4, conn->recv_len + 4);

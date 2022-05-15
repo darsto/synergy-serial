@@ -14,6 +14,8 @@ struct synergy_proto_conn {
     char resp_buf[512];
     int resp_len;
     int recv_error; /**< non-zero on receive error */
+
+    uint16_t mouse_x, mouse_y;
 };
 
 int synergy_proto_handle_greeting(struct synergy_proto_conn *conn);
