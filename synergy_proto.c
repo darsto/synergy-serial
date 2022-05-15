@@ -228,9 +228,10 @@ proto_handle_qinf(struct synergy_proto_conn *conn)
 		return 1;
 	}
 
-	uint16_t x, y, w, h;
-	uint16_t warp_size;
-	uint16_t mpos_x, mpos_y;
+	uint16_t x = CONFIG_SCREENX, y = CONFIG_SCREENY;
+	uint16_t w = CONFIG_SCREENW, h = CONFIG_SCREENH;
+	uint16_t warp_size = 0;
+	uint16_t mpos_x = 0, mpos_y = 0;
 	write_raw_string(conn, "DINF");
 	write_uint16(conn, x);
 	write_uint16(conn, y);
