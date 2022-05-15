@@ -4,11 +4,19 @@
 
 #include "serial.h"
 
+static int g_fd;
+
+void
+serial_set_fd(int fd)
+{
+	g_fd = fd;
+}
+
 int
-serial_set_interface_attribs(int fd, int speed, int parity)
+serial_set_interface_attribs(int speed, int parity)
 {
 	struct termios tty;
-	if (tcgetattr(fd, &tty) != 0) {
+	if (tcgetattr(g_fd, &tty) != 0) {
 		perror("tcgetattr");
 		return -1;
 	}
@@ -35,7 +43,7 @@ serial_set_interface_attribs(int fd, int speed, int parity)
 	tty.c_cflag &= ~CSTOPB;
 	tty.c_cflag &= ~CRTSCTS;
 
-	if (tcsetattr(fd, TCSANOW, &tty) != 0) {
+	if (tcsetattr(g_fd, TCSANOW, &tty) != 0) {
 		perror("tcsetattr");
 		return -1;
 	}
@@ -43,11 +51,11 @@ serial_set_interface_attribs(int fd, int speed, int parity)
 }
 
 void
-serial_set_blocking(int fd, int should_block)
+serial_set_blocking(int should_block)
 {
 	struct termios tty;
 	memset(&tty, 0, sizeof tty);
-	if (tcgetattr(fd, &tty) != 0) {
+	if (tcgetattr(g_fd, &tty) != 0) {
 		perror("tcgetattr");
 		return;
 	}
@@ -55,5 +63,5 @@ serial_set_blocking(int fd, int should_block)
 	tty.c_cc[VMIN] = should_block ? 1 : 0;
 	tty.c_cc[VTIME] = 5;  // 0.5 seconds read timeout
 
-	if (tcsetattr(fd, TCSANOW, &tty) != 0) perror("tcsetattr");
+	if (tcsetattr(g_fd, TCSANOW, &tty) != 0) perror("tcsetattr");
 }
