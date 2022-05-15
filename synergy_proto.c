@@ -154,6 +154,18 @@ write_string(struct synergy_proto_conn *conn, const char *str)
 }
 
 static void
+read_nbytes(struct synergy_proto_conn *conn, unsigned nbytes)
+{
+	if (conn->recv_len < nbytes) {
+		conn->recv_error = -EINVAL;
+		return 0;
+	}
+
+	conn->recv_buf += nbytes;
+	conn->recv_len -= nbytes;
+}
+
+static void
 clear_resp(struct synergy_proto_conn *conn)
 {
 	conn->resp_len = 4;
@@ -299,7 +311,7 @@ proto_handle_set_options(struct synergy_proto_conn *conn)
 		char *tag_str = conn->recv_buf;
 		uint32_t tag = read_uint32(conn);
 		uint32_t val = read_uint32(conn);
-		LOG(LOG_INFO, "%4s = %"PRIu32, tag_str, val);
+		LOG(LOG_INFO, "%.4s = %"PRIu32, tag_str, val);
 		num_opts -= 2;
 	}
 
@@ -322,6 +334,36 @@ proto_handle_keepalive(struct synergy_proto_conn *conn)
 	return 0;
 }
 
+static int
+proto_handle_screen_enter(struct synergy_proto_conn *conn)
+{
+	uint16_t enter_x = read_uint16(conn);
+	uint16_t enter_y = read_uint16(conn);
+	uint32_t seq_no = read_uint32(conn);
+	uint16_t key_mod_mask = read_uint16(conn);
+	EXIT_ON_INVALID_RECV_PKT(conn);
+
+	LOG(LOG_INFO, "screen enter; x=%u, y=%u, seq_no=%u, key_mask=%u",
+			enter_x, enter_y, seq_no, key_mod_mask);
+
+	return 0;
+}
+
+static int
+proto_handle_clipboard_sync(struct synergy_proto_conn *conn)
+{
+	uint8_t id = read_uint8(conn);
+	uint32_t seq_id = read_uint32(conn);
+	uint8_t unk = read_uint8(conn);
+	uint32_t str_len = read_uint32(conn);
+	const char *str = (const char *)conn->recv_buf;
+	read_nbytes(conn, str_len);
+	EXIT_ON_INVALID_RECV_PKT(conn);
+
+	/* this can't work obviously */
+	return 0;
+}
+
 int
 synergy_handle_pkt(struct synergy_proto_conn *conn)
 {
@@ -341,7 +383,13 @@ synergy_handle_pkt(struct synergy_proto_conn *conn)
 		return proto_handle_set_options(conn);
 	} else if (tag == STR2TAG("CALV")) {
 		return proto_handle_keepalive(conn);
+	} else if (tag == STR2TAG("CINN")) {
+		return proto_handle_screen_enter(conn);
+	} else if (tag == STR2TAG("DCLP")) {
+		return proto_handle_clipboard_sync(conn);
 	}
+
+	LOG(LOG_INFO, "unknown pkt: %.4s (%d)", conn->recv_buf - 4, conn->recv_len + 4);
 
 	return 0;
 }

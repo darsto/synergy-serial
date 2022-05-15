@@ -38,7 +38,7 @@ main(int argc, char *argv[])
 {
 	int fd;
 	struct sockaddr_in saddr_in = {};
-	char buf[2000];
+	char buf[4096];
 	char *bufptr;
 	int rc;
 	unsigned buflen;
@@ -103,7 +103,7 @@ main(int argc, char *argv[])
 	while (1) {
 		rc = poll(pfds, sizeof(pfds) / sizeof(pfds[0]), -1);
 		if (rc < 0) {
-			LOG(LOG_ERROR, "poll returned %d", rc);
+			LOG(LOG_ERROR, "poll returned %d, errno=%d", rc, errno);
 			return 1;
 		}
 
@@ -112,7 +112,7 @@ main(int argc, char *argv[])
 
 			rc = recv(fd, buf, sizeof(buf), 0);
 			if (rc < 0) {
-				LOG(LOG_ERROR, "recv: %d", rc);
+				LOG(LOG_ERROR, "recv returned %d, errno=%d", rc, errno);
 				return 1;
 			}
 
