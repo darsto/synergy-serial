@@ -55,7 +55,7 @@ main(int argc, char *argv[])
 		LOG(LOG_ERROR, "Could not create socket");
 	}
 
-	saddr_in.sin_addr.s_addr = inet_addr("10.0.0.101");
+	saddr_in.sin_addr.s_addr = inet_addr("127.0.0.1");
 	saddr_in.sin_family = AF_INET;
 	saddr_in.sin_port = htons(24800);
 
