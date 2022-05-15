@@ -6,7 +6,9 @@
 #include <stdio.h>
 #include <string.h>
 #include <sys/socket.h>
+#include <sys/poll.h>
 #include <errno.h>
+#include <netinet/tcp.h>
 
 #include "synergy_proto.h"
 #include "common.h"
@@ -35,7 +37,7 @@ int
 main(int argc, char *argv[])
 {
 	int fd;
-	struct sockaddr_in saddr_in;
+	struct sockaddr_in saddr_in = {};
 	char buf[2000];
 	char *bufptr;
 	int rc;
@@ -50,18 +52,19 @@ main(int argc, char *argv[])
 #endif
 
 	// Create socket
-	fd = socket(AF_INET, SOCK_STREAM, 0);
+	fd = socket(AF_INET, SOCK_STREAM, IPPROTO_IP);
 	if (fd == -1) {
 		LOG(LOG_ERROR, "Could not create socket");
+		return 1;
 	}
 
-	saddr_in.sin_addr.s_addr = inet_addr("127.0.0.1");
 	saddr_in.sin_family = AF_INET;
 	saddr_in.sin_port = htons(24800);
+	inet_pton(AF_INET, "127.0.0.1", &saddr_in.sin_addr);
 
 	rc = connect(fd, (struct sockaddr *)&saddr_in, sizeof(saddr_in));
 	if (rc < 0) {
-		LOG(LOG_ERROR, "connect: %d", rc);
+		LOG(LOG_ERROR, "connect: %s", strerror(errno));
 		return 1;
 	}
 
@@ -93,32 +96,46 @@ main(int argc, char *argv[])
 		return 1;
 	}
 
+	struct pollfd pfds[1];
+	pfds[0].fd = g_conn.fd;
+	pfds[0].events = POLLIN | POLLERR;
+
 	while (1) {
-		rc = recv(fd, buf, sizeof(buf), 0);
+		rc = poll(pfds, sizeof(pfds) / sizeof(pfds[0]), -1);
 		if (rc < 0) {
-			LOG(LOG_ERROR, "recv: %d", rc);
+			LOG(LOG_ERROR, "poll returned %d", rc);
 			return 1;
 		}
 
-		bufptr = buf;
-		buflen = rc;
-		while (buflen > 8) {
-			uint32_t len = ntohl(*(uint32_t *)bufptr);
-			if (len > buflen) {
-				LOG(LOG_ERROR, "recv incomplete packet: pktlen=%d, buflen=%d", len, rc);
-				return 1;
-			}
+		if (pfds[0].revents & POLLIN) {
+			pfds[0].revents &= ~POLLIN;
 
-			g_conn.recv_buf = bufptr;
-			g_conn.recv_len = len;
-			rc = synergy_handle_pkt(&g_conn);
+			rc = recv(fd, buf, sizeof(buf), 0);
 			if (rc < 0) {
-				LOG(LOG_ERROR, "synergy_handle_pkt() returned %d", rc);
+				LOG(LOG_ERROR, "recv: %d", rc);
 				return 1;
 			}
 
-			bufptr += len;
-			buflen -= len;
+			bufptr = buf;
+			buflen = rc;
+			while (buflen >= 8) {
+				uint32_t len = ntohl(*(uint32_t *)bufptr);
+				if (len + 4 > buflen) {
+					LOG(LOG_ERROR, "recv incomplete packet: pktlen=%d, buflen=%d", len, rc);
+					return 1;
+				}
+
+				g_conn.recv_buf = bufptr + 4;
+				g_conn.recv_len = len;
+				rc = synergy_handle_pkt(&g_conn);
+				if (rc < 0) {
+					LOG(LOG_ERROR, "synergy_handle_pkt() returned %d", rc);
+					return 1;
+				}
+
+				bufptr += len + 4;
+				buflen -= len + 4;
+			}
 		}
 	}
 

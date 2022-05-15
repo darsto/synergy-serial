@@ -28,7 +28,7 @@ read_uint8(struct synergy_proto_conn *conn)
 
 	conn->recv_buf += 1;
 	conn->recv_len -= 1;
-	return *(uint32_t *)(*conn->recv_buf - 1);
+	return *(uint8_t *)(conn->recv_buf - 1);
 }
 
 static int8_t
@@ -65,7 +65,7 @@ read_uint16(struct synergy_proto_conn *conn)
 
 	conn->recv_buf += 2;
 	conn->recv_len -= 2;
-	return *(uint32_t *)(*conn->recv_buf - 2);
+	return ntohs(*(uint16_t *)(conn->recv_buf - 2));
 }
 
 static int16_t
@@ -101,7 +101,7 @@ read_uint32(struct synergy_proto_conn *conn)
 
 	conn->recv_buf += 4;
 	conn->recv_len -= 4;
-	return *(uint32_t *)(*conn->recv_buf - 4);
+	return ntohl(*(uint32_t *)(conn->recv_buf - 4));
 }
 
 static int32_t
@@ -156,7 +156,7 @@ write_string(struct synergy_proto_conn *conn, const char *str)
 static void
 clear_resp(struct synergy_proto_conn *conn)
 {
-	conn->resp_len = 0;
+	conn->resp_len = 4;
 }
 
 static void
@@ -164,12 +164,14 @@ flush_resp(struct synergy_proto_conn *conn)
 {
 	int rc;
 
+	*(uint32_t *)conn->resp_buf = htonl(conn->resp_len - 4);
+
 	rc = send(conn->fd, conn->resp_buf, conn->resp_len, 0);
 	if (rc < 0) {
 		perror("send");
 		return;
 	}
-	conn->resp_len = 0;
+	conn->resp_len = 4;
 }
 
 #define EXIT_ON_RECV_ERROR(conn) \
@@ -192,10 +194,18 @@ flush_resp(struct synergy_proto_conn *conn)
 	} \
 })
 
+static void
+init_synergy_proto_conn(struct synergy_proto_conn *conn)
+{
+	conn->resp_len = 4;
+}
+
 int
 synergy_proto_handle_greeting(struct synergy_proto_conn *conn)
 {
 	const char *magicstr = "Synergy";
+
+	init_synergy_proto_conn(conn);
 
 	if (conn->recv_len != strlen(magicstr) + 4) {
 		LOG(LOG_ERROR, "invalid pkt len (got %d bytes, expected %d)",
@@ -207,7 +217,8 @@ synergy_proto_handle_greeting(struct synergy_proto_conn *conn)
 		fprintf(stderr, "recv greeting with wrong magic");
 		return -1;
 	}
-	conn->recv_len += strlen(magicstr);
+	conn->recv_buf += strlen(magicstr);
+	conn->recv_len -= strlen(magicstr);
 
 	int majorver, minorver;
 	majorver = read_uint16(conn);
@@ -219,7 +230,7 @@ synergy_proto_handle_greeting(struct synergy_proto_conn *conn)
 	write_raw_string(conn, magicstr);
 	write_uint16(conn, majorver);
 	write_uint16(conn, minorver);
-	write_string(conn, "mymachine");
+	write_string(conn, CONFIG_HOSTNAME);
 	flush_resp(conn);
 
 	return 0;
@@ -271,7 +282,13 @@ proto_handle_set_options(struct synergy_proto_conn *conn)
 	num_opts = read_uint32(conn);
 	EXIT_ON_RECV_ERROR(conn);
 
-	if (num_opts * 8 != conn->recv_len) {
+	if (num_opts % 2 == 1) {
+		LOG(LOG_ERROR, "invalid opts num - expecting even, got %d",
+				num_opts);
+		return 1;
+	}
+
+	if (num_opts * 4 != conn->recv_len) {
 		LOG(LOG_ERROR, "invalid pkt len (got %d bytes, expected %d) "
 				"(expecting %d opts)",
 				conn->recv_len, num_opts * 8, num_opts);
@@ -283,6 +300,7 @@ proto_handle_set_options(struct synergy_proto_conn *conn)
 		uint32_t tag = read_uint32(conn);
 		uint32_t val = read_uint32(conn);
 		LOG(LOG_INFO, "%4s = %"PRIu32, tag_str, val);
+		num_opts -= 2;
 	}
 
 	EXIT_ON_INVALID_RECV_PKT(conn);
@@ -309,8 +327,8 @@ synergy_handle_pkt(struct synergy_proto_conn *conn)
 {
 	uint32_t tag;
 
+	assert(conn->recv_len >= 4);
 	tag = read_uint32(conn);
-	EXIT_ON_RECV_ERROR(conn);
 
 	/* TODO binary search perhaps? */
 	if (tag == STR2TAG("QINF")) {
@@ -324,4 +342,6 @@ synergy_handle_pkt(struct synergy_proto_conn *conn)
 	} else if (tag == STR2TAG("CALV")) {
 		return proto_handle_keepalive(conn);
 	}
+
+	return 0;
 }
