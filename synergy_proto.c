@@ -13,6 +13,7 @@
 
 #include "synergy_proto.h"
 #include "common.h"
+#include "config.h"
 
 #define STR2TAG(str) \
 	((uint32_t)(((str)[0] << 24) | ((str)[1] << 16) | ((str)[2] << 8) | ((str)[3])))
