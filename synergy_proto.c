@@ -16,6 +16,15 @@
 #include "config.h"
 #include "serial.h"
 
+enum {
+	KEYMASK_NONE = 0,
+	KEYMASK_SHIFT = 1,
+	KEYMASK_CTRL = 2,
+	KEYMASK_ALT = 4,
+	KEYMASK_WINDOWS = 16,
+	KEYMASK_CAPSLOCK = 4096,
+};
+
 #define STR2TAG(str) \
 	((uint32_t)(((str)[0] << 24) | ((str)[1] << 16) | ((str)[2] << 8) | ((str)[3])))
 
