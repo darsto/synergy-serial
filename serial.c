@@ -4,7 +4,7 @@
 
 #include "serial.h"
 
-static int g_fd;
+static int g_fd = -1;
 
 void
 serial_set_fd(int fd)
