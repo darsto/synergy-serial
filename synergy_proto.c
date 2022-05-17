@@ -159,7 +159,7 @@ read_nbytes(struct synergy_proto_conn *conn, unsigned nbytes)
 {
 	if (conn->recv_len < nbytes) {
 		conn->recv_error = -EINVAL;
-		return 0;
+		return;
 	}
 
 	conn->recv_buf += nbytes;
@@ -394,8 +394,8 @@ proto_handle_mouse_move(struct synergy_proto_conn *conn)
 static int
 proto_handle_rel_mouse_move(struct synergy_proto_conn *conn)
 {
-	int16_t x_delta = read_uint16(conn);
-	int16_t y_delta = read_uint16(conn);
+	int16_t x_delta = read_int16(conn);
+	int16_t y_delta = read_int16(conn);
 	EXIT_ON_INVALID_RECV_PKT(conn);
 
 	LOG(LOG_INFO, "rel mouse move (%d,%d)", x_delta, y_delta);
@@ -421,6 +421,43 @@ proto_handle_rel_mouse_move(struct synergy_proto_conn *conn)
 	conn->mouse_x += x_delta;
 	conn->mouse_y += y_delta;
 
+	return 0;
+}
+
+static int
+proto_handle_mouse_down(struct synergy_proto_conn *conn)
+{
+	uint8_t id = read_uint8(conn);
+	EXIT_ON_INVALID_RECV_PKT(conn);
+
+	LOG(LOG_INFO, "mouse down (%d)", id);
+
+	serial_ard_mouse_down(id);
+	return 0;
+}
+
+static int
+proto_handle_mouse_up(struct synergy_proto_conn *conn)
+{
+	uint8_t id = read_uint8(conn);
+	EXIT_ON_INVALID_RECV_PKT(conn);
+
+	LOG(LOG_INFO, "mouse up (%d)", id);
+
+	serial_ard_mouse_up(id);
+	return 0;
+}
+
+static int
+proto_handle_mouse_wheel(struct synergy_proto_conn *conn)
+{
+	int16_t x_delta = read_int16(conn);
+	int16_t y_delta = read_int16(conn);
+	EXIT_ON_INVALID_RECV_PKT(conn);
+
+	LOG(LOG_INFO, "mouse wheel (%d,%d)", x_delta, y_delta);
+
+	serial_ard_mouse_wheel(x_delta, y_delta);
 	return 0;
 }
 
@@ -453,6 +490,12 @@ synergy_handle_pkt(struct synergy_proto_conn *conn)
 		return proto_handle_mouse_move(conn);
 	} else if (tag == STR2TAG("DMRM")) {
 		return proto_handle_rel_mouse_move(conn);
+	} else if (tag == STR2TAG("DMDN")) {
+		return proto_handle_mouse_down(conn);
+	} else if (tag == STR2TAG("DMUP")) {
+		return proto_handle_mouse_up(conn);
+	} else if (tag == STR2TAG("DMWM")) {
+		return proto_handle_mouse_wheel(conn);
 	}
 
 	LOG(LOG_INFO, "unknown pkt: %.4s (%d)", conn->recv_buf - 4, conn->recv_len + 4);
