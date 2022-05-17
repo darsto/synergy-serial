@@ -381,7 +381,7 @@ proto_handle_mouse_move(struct synergy_proto_conn *conn)
 	uint16_t abs_y = read_uint16(conn);
 	EXIT_ON_INVALID_RECV_PKT(conn);
 
-	LOG(LOG_INFO, "mouse move to (%u,%u)", abs_x, abs_y);
+	//LOG(LOG_INFO, "mouse move to (%u,%u)", abs_x, abs_y);
 
 	int16_t x_delta, y_delta;
 	x_delta = abs_x - conn->mouse_x;
@@ -470,6 +470,34 @@ proto_handle_mouse_wheel(struct synergy_proto_conn *conn)
 	return 0;
 }
 
+static int
+proto_handle_key_down(struct synergy_proto_conn *conn)
+{
+	uint16_t id = read_uint16(conn);
+	uint16_t mods = read_uint16(conn);
+	uint16_t phys_id = read_uint16(conn);
+	EXIT_ON_INVALID_RECV_PKT(conn);
+
+	LOG(LOG_INFO, "key down (id=%d, phys_id=%d, mods=0x%.4x)", id, phys_id, mods);
+
+	serial_ard_key_down(id, phys_id, mods);
+	return 0;
+}
+
+static int
+proto_handle_key_up(struct synergy_proto_conn *conn)
+{
+	uint16_t id = read_uint16(conn);
+	uint16_t mods = read_uint16(conn);
+	uint16_t phys_id = read_uint16(conn);
+	EXIT_ON_INVALID_RECV_PKT(conn);
+
+	LOG(LOG_INFO, "key up (id=%d, phys_id=%d, mods=0x%.4x)", id, phys_id, mods);
+
+	serial_ard_key_down(id, phys_id, mods);
+	return 0;
+}
+
 int
 synergy_handle_pkt(struct synergy_proto_conn *conn)
 {
@@ -505,6 +533,10 @@ synergy_handle_pkt(struct synergy_proto_conn *conn)
 		return proto_handle_mouse_up(conn);
 	} else if (tag == STR2TAG("DMWM")) {
 		return proto_handle_mouse_wheel(conn);
+	} else if (tag == STR2TAG("DKDN")) {
+		return proto_handle_key_down(conn);
+	} else if (tag == STR2TAG("DKUP")) {
+		return proto_handle_key_up(conn);
 	}
 
 	LOG(LOG_INFO, "unknown pkt: %.4s (%d)", conn->recv_buf - 4, conn->recv_len + 4);
