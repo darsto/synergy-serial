@@ -1,16 +1,12 @@
 #include <stdio.h>
 #include <errno.h>
 #include <string.h>
+#include <stdbool.h>
 
 #include "serial.h"
+#include "config.h"
 
 static int g_fd = -1;
-
-void
-serial_set_fd(int fd)
-{
-	g_fd = fd;
-}
 
 int
 serial_set_interface_attribs(int speed, int parity)
@@ -78,6 +74,15 @@ static int
 serial_sendmsg(struct serial_msg *msg)
 {
 	return write(g_fd, msg, sizeof(*msg));
+}
+
+void
+serial_set_fd(int fd, int speed, int parity, int should_block)
+{
+	g_fd = fd;
+	serial_set_interface_attribs(speed, parity);
+	serial_set_blocking(should_block);
+	serial_sendmsg(&(struct serial_msg){ "SCFG", CONFIG_SCREENW, CONFIG_SCREENH });
 }
 
 int

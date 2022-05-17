@@ -130,9 +130,7 @@ main(int argc, char *argv[])
         return 1;
     }
 
-	serial_set_fd(serialfd);
-    serial_set_interface_attribs(g_args.baudrate, 0);  // set baudrate, 8n1 (no parity)
-    serial_set_blocking(1); // set blocking
+	serial_set_fd(serialfd, g_args.baudrate, 0, 1); /* given baudrate with 8n1 (no parity) */
 
 #endif
 
