@@ -113,16 +113,41 @@ serial_set_fd(int fd, int speed, int parity, int should_block)
 	serial_sendmsg(&(struct serial_msg){ "SCFG", CONFIG_SCREENW, CONFIG_SCREENH });
 }
 
+static int16_t g_x_delta, g_y_delta;
+static int16_t g_x = -1, g_y = -1;
+
 int
 serial_ard_set_mouse_pos(uint16_t x, uint16_t y)
 {
-	return serial_sendmsg(&(struct serial_msg){ "MSET", x, y });
+	g_x = x;
+	g_y = y;
+	return 0;
 }
 
 int
 serial_ard_mouse_move(int16_t x_delta, int16_t y_delta)
 {
-	return serial_sendmsg(&(struct serial_msg){ "MMOV", x_delta, y_delta });
+	g_x_delta += x_delta;
+	g_y_delta += y_delta;
+	return 0;
+}
+
+int
+serial_ard_kick_mouse_move(void)
+{
+	int rc = -1;
+
+	if (g_x_delta || g_y_delta) {
+		rc = serial_sendmsg(&(struct serial_msg){ "MMOV", g_x_delta, g_y_delta });
+		g_x_delta = 0;
+		g_y_delta = 0;
+	} else if (g_x > 0 || g_y > 0) {
+		rc = serial_sendmsg(&(struct serial_msg){ "MSET", g_x, g_y });
+		g_x = -1;
+		g_y = -1;
+	}
+
+	return rc;
 }
 
 int

@@ -12,10 +12,12 @@
 #include <errno.h>
 #include <netinet/tcp.h>
 #include <getopt.h>
+ #include <sys/timerfd.h>
 
 #include "synergy_proto.h"
 #include "common.h"
 #include "serial.h"
+#include "config.h"
 
 static struct synergy_proto_conn g_conn = {};
 static struct {
@@ -176,9 +178,23 @@ main(int argc, char *argv[])
 		return 1;
 	}
 
-	struct pollfd pfds[1];
+	int timerfd = timerfd_create(CLOCK_MONOTONIC, 0);
+	if (timerfd < 0) {
+		LOG(LOG_ERROR, "timerfd_create() returned %d", errno);
+		return 1;
+	}
+
+	struct itimerspec timerfd_time = { 0 };
+	timerfd_time.it_interval.tv_nsec = 1000 * CONFIG_SERIAL_MOUSE_INTERVAL_MS;
+	timerfd_time.it_value.tv_nsec = 1000 * CONFIG_SERIAL_MOUSE_INTERVAL_MS;
+	timerfd_settime(timerfd, 0, &timerfd_time, NULL);
+
+	struct pollfd pfds[2];
 	pfds[0].fd = g_conn.fd;
 	pfds[0].events = POLLIN | POLLERR;
+
+	pfds[1].fd = timerfd;
+	pfds[1].events = POLLIN;
 
 	while (1) {
 		rc = poll(pfds, sizeof(pfds) / sizeof(pfds[0]), -1);
@@ -261,6 +277,14 @@ main(int argc, char *argv[])
 				bufptr += len + 4;
 				buflen -= len + 4;
 			}
+		}
+
+		if (pfds[1].revents & POLLIN) {
+			pfds[0].revents &= ~POLLIN;
+
+			serial_ard_kick_mouse_move();
+
+			usleep(16 * 1000);
 		}
 	}
 

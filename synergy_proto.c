@@ -402,12 +402,8 @@ proto_handle_mouse_move(struct synergy_proto_conn *conn)
 	x_delta = abs_x - conn->mouse_x;
 	y_delta = abs_y - conn->mouse_y;
 
-	if (x_delta < 2 && y_delta < 2) {
-		return 0;
-	}
-
 	//LOG(LOG_INFO, "mouse move (delta %d,%d)", x_delta, y_delta);
-	serial_ard_mouse_move(x_delta, y_delta);
+	serial_ard_set_mouse_pos(abs_x, abs_y);
 
 	conn->mouse_x = abs_x;
 	conn->mouse_y = abs_y;
