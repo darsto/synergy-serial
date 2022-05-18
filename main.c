@@ -49,6 +49,7 @@ main(int argc, char *argv[])
 	char *bufptr;
 	int rc;
 	unsigned buflen;
+	int serialfd;
 
 	while (1) {
 		int opt_index = 0;
@@ -121,18 +122,14 @@ main(int argc, char *argv[])
 		return 1;
 	}
 
-#if 0
-	int serialfd;
-
 	serialfd = open(g_args.serial_devpath, O_RDWR | O_NOCTTY | O_SYNC);
     if (serialfd < 0) {
-        LOG(LOG_ERROR, "Can't open serial device at \"%s\": %s\n", errno, "/dev/ttyUSB2", strerror(errno));
+        LOG(LOG_ERROR, "Can't open serial device at \"%s\": %s\n",
+				g_args.serial_devpath, strerror(errno));
         return 1;
     }
 
 	serial_set_fd(serialfd, g_args.baudrate, 0, 1); /* given baudrate with 8n1 (no parity) */
-
-#endif
 
 	fd = socket(AF_INET, SOCK_STREAM, IPPROTO_IP);
 	if (fd == -1) {
