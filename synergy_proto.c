@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdint.h>
+#include <stdbool.h>
 #include <inttypes.h>
 #include <sys/socket.h>
 #include <arpa/inet.h>
@@ -320,6 +321,7 @@ proto_handle_set_options(struct synergy_proto_conn *conn)
 	while (num_opts > 0) {
 		char *tag_str = conn->recv_buf;
 		uint32_t tag = read_uint32(conn);
+		(void)tag;
 		uint32_t val = read_uint32(conn);
 		LOG(LOG_INFO, "%.4s = %"PRIu32, tag_str, val);
 		num_opts -= 2;
@@ -344,6 +346,8 @@ proto_handle_keepalive(struct synergy_proto_conn *conn)
 	return 0;
 }
 
+static bool g_skip_next_mouse_move = false;
+
 static int
 proto_handle_screen_enter(struct synergy_proto_conn *conn)
 {
@@ -356,6 +360,10 @@ proto_handle_screen_enter(struct synergy_proto_conn *conn)
 	LOG(LOG_INFO, "screen enter; x=%u, y=%u, seq_no=%u, key_mask=%u",
 			enter_x, enter_y, seq_no, key_mod_mask);
 
+
+	g_skip_next_mouse_move = true;
+	serial_ard_set_mouse_pos(enter_x, enter_y);
+
 	return 0;
 }
 
@@ -367,6 +375,10 @@ proto_handle_clipboard_sync(struct synergy_proto_conn *conn)
 	uint8_t unk = read_uint8(conn);
 	uint32_t str_len = read_uint32(conn);
 	const char *str = (const char *)conn->recv_buf;
+	(void)id;
+	(void)seq_id;
+	(void)unk;
+	(void)str;
 	read_nbytes(conn, str_len);
 	EXIT_ON_INVALID_RECV_PKT(conn);
 
@@ -381,18 +393,21 @@ proto_handle_mouse_move(struct synergy_proto_conn *conn)
 	uint16_t abs_y = read_uint16(conn);
 	EXIT_ON_INVALID_RECV_PKT(conn);
 
-	//LOG(LOG_INFO, "mouse move to (%u,%u)", abs_x, abs_y);
+	if (g_skip_next_mouse_move) {
+		g_skip_next_mouse_move = false;
+		return 0;
+	}
 
 	int16_t x_delta, y_delta;
 	x_delta = abs_x - conn->mouse_x;
 	y_delta = abs_y - conn->mouse_y;
 
-	if (x_delta * x_delta + y_delta * y_delta <
-			CONFIG_MOUSE_SYNC_MARGIN * CONFIG_MOUSE_SYNC_MARGIN) {
-		serial_ard_set_mouse_pos(abs_x, abs_y);
-	} else {
-		serial_ard_mouse_move(x_delta, y_delta);
+	if (x_delta < 2 && y_delta < 2) {
+		return 0;
 	}
+
+	//LOG(LOG_INFO, "mouse move (delta %d,%d)", x_delta, y_delta);
+	serial_ard_mouse_move(x_delta, y_delta);
 
 	conn->mouse_x = abs_x;
 	conn->mouse_y = abs_y;
@@ -407,7 +422,7 @@ proto_handle_rel_mouse_move(struct synergy_proto_conn *conn)
 	int16_t y_delta = read_int16(conn);
 	EXIT_ON_INVALID_RECV_PKT(conn);
 
-	LOG(LOG_INFO, "rel mouse move (%d,%d)", x_delta, y_delta);
+	//LOG(LOG_INFO, "rel mouse move (%d,%d)", x_delta, y_delta);
 
 	serial_ard_mouse_move(x_delta, y_delta);
 
