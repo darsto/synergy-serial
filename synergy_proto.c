@@ -28,7 +28,7 @@ enum {
 #define STR2TAG(str) \
 	((uint32_t)(((str)[0] << 24) | ((str)[1] << 16) | ((str)[2] << 8) | ((str)[3])))
 
-static uint8_t
+static uint8_t __attribute__((used))
 read_uint8(struct synergy_proto_conn *conn)
 {
 	if (conn->recv_len < 1) {
@@ -41,13 +41,13 @@ read_uint8(struct synergy_proto_conn *conn)
 	return *(uint8_t *)(conn->recv_buf - 1);
 }
 
-static int8_t
+static int8_t __attribute__((used))
 read_int8(struct synergy_proto_conn *conn)
 {
 	return (int8_t)read_uint8(conn);
 }
 
-static void
+static void __attribute__((used))
 write_uint8(struct synergy_proto_conn *conn, uint8_t val)
 {
 	void *buf;
@@ -58,13 +58,13 @@ write_uint8(struct synergy_proto_conn *conn, uint8_t val)
 	conn->resp_len += 1;
 }
 
-static void
+static void __attribute__((used))
 write_int8(struct synergy_proto_conn *conn, int8_t val)
 {
 	write_uint8(conn, (uint8_t)val);
 }
 
-static uint16_t
+static uint16_t __attribute__((used))
 read_uint16(struct synergy_proto_conn *conn)
 {
 	if (conn->recv_len < 2) {
@@ -78,13 +78,13 @@ read_uint16(struct synergy_proto_conn *conn)
 	return ntohs(*(uint16_t *)(conn->recv_buf - 2));
 }
 
-static int16_t
+static int16_t __attribute__((used))
 read_int16(struct synergy_proto_conn *conn)
 {
 	return (int16_t)read_uint16(conn);
 }
 
-static void
+static void __attribute__((used))
 write_uint16(struct synergy_proto_conn *conn, uint16_t val)
 {
 	void *buf;
@@ -95,13 +95,13 @@ write_uint16(struct synergy_proto_conn *conn, uint16_t val)
 	conn->resp_len += 2;
 }
 
-static void
+static void __attribute__((used))
 write_int16(struct synergy_proto_conn *conn, int16_t val)
 {
 	write_uint16(conn, (uint16_t)val);
 }
 
-static uint32_t
+static uint32_t __attribute__((used))
 read_uint32(struct synergy_proto_conn *conn)
 {
 	if (conn->recv_len < 4) {
@@ -114,13 +114,13 @@ read_uint32(struct synergy_proto_conn *conn)
 	return ntohl(*(uint32_t *)(conn->recv_buf - 4));
 }
 
-static int32_t
+static int32_t __attribute__((used))
 read_int32(struct synergy_proto_conn *conn)
 {
 	return (int32_t)read_uint32(conn);
 }
 
-static void
+static void __attribute__((used))
 write_uint32(struct synergy_proto_conn *conn, uint32_t val)
 {
 	void *buf;
@@ -131,13 +131,13 @@ write_uint32(struct synergy_proto_conn *conn, uint32_t val)
 	conn->resp_len += 4;
 }
 
-static void
+static void __attribute__((used))
 write_int32(struct synergy_proto_conn *conn, int32_t val)
 {
 	write_uint32(conn, (uint32_t)val);
 }
 
-static void
+static void __attribute__((used))
 write_raw_string(struct synergy_proto_conn *conn, const char *str)
 {
 	void *buf;
@@ -149,7 +149,7 @@ write_raw_string(struct synergy_proto_conn *conn, const char *str)
 	conn->resp_len += len;
 }
 
-static void
+static void __attribute__((used))
 write_string(struct synergy_proto_conn *conn, const char *str)
 {
 	void *buf;
@@ -163,7 +163,7 @@ write_string(struct synergy_proto_conn *conn, const char *str)
 	conn->resp_len += len;
 }
 
-static void
+static void __attribute__((used))
 read_nbytes(struct synergy_proto_conn *conn, unsigned nbytes)
 {
 	if (conn->recv_len < nbytes) {
@@ -175,13 +175,13 @@ read_nbytes(struct synergy_proto_conn *conn, unsigned nbytes)
 	conn->recv_len -= nbytes;
 }
 
-static void
+static void __attribute__((used))
 clear_resp(struct synergy_proto_conn *conn)
 {
 	conn->resp_len = 4;
 }
 
-static void
+static void __attribute__((used))
 flush_resp(struct synergy_proto_conn *conn)
 {
 	int rc;
