@@ -50,6 +50,7 @@ main(int argc, char *argv[])
 	int rc;
 	unsigned buflen;
 	int serialfd;
+	int skip_nbytes = 0;
 
 	while (1) {
 		int opt_index = 0;
@@ -198,6 +199,19 @@ main(int argc, char *argv[])
 			bufptr = pkt_buf.cur;
 			buflen = rc;
 
+			if (skip_nbytes > 0) {
+				prevlen = 0;
+
+				if (skip_nbytes >= buflen) {
+					skip_nbytes -= buflen;
+					continue;
+				} else {
+					bufptr += skip_nbytes;
+					buflen -= skip_nbytes;
+					skip_nbytes = 0;
+				}
+			}
+
 			if (prevlen > 0) {
 				bufptr = pkt_buf.prev + sizeof(pkt_buf.prev) - prevlen;
 				buflen += prevlen;
@@ -212,10 +226,17 @@ main(int argc, char *argv[])
 				}
 
 				uint32_t len = ntohl(*(uint32_t *)bufptr);
-				if (len + 4 >= 2048) {
+				if (len + 4 >= 65536) {
 					/* we certainly screwed up somewhere */
 					LOG(LOG_ERROR, "recv incomplete packet: pktlen=%d, buflen=%d", len, rc);
 					return 1;
+				}
+
+				if (len + 4 >= 2048) {
+					/* we don't support packets this big (like clipboard contents) */
+					skip_nbytes = len + 4 - buflen;
+					LOG(LOG_ERROR, "recv too big packet: pktlen=%d, buflen=%d", len, rc);
+					break;
 				}
 
 				if (len + 4 > buflen) {
