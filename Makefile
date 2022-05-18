@@ -1,5 +1,5 @@
 OBJECTS = main.o common.o synergy_proto.o serial.o
-_CFLAGS := -O0 -g -MMD -MP -fno-strict-aliasing -Wall -Wno-format-truncation $(CFLAGS)
+_CFLAGS := -O2 -g -MMD -MP -fno-strict-aliasing -Wall -Wno-format-truncation $(CFLAGS)
 
 $(@shell mkdir -p build &>/dev/null)
 
