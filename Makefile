@@ -5,7 +5,7 @@ $(@shell mkdir -p build &>/dev/null)
 
 .PHONY: clean all build/gcc_ver.h
 
-all: build/synergy-esp
+all: build/synergy-serial
 
 clean:
 	rm -f $(OBJECTS:%.o=build/%.o) $(OBJECTS:%.o=build/%.d) build/gcc_ver.h
@@ -18,7 +18,7 @@ build/gcc_ver.h: build
 	$(shell if ! cmp build/gcc_ver_tmp.h build/gcc_ver.h 2>/dev/null 1>&2; then make clean; fi)
 	@cp build/gcc_ver_tmp.h build/gcc_ver.h
 
-build/synergy-esp: build/gcc_ver.h $(OBJECTS:%.o=build/%.o)
+build/synergy-serial: build/gcc_ver.h $(OBJECTS:%.o=build/%.o)
 	gcc $(_CFLAGS) -o $@ $^
 
 build/%.o: %.c
