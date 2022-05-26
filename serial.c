@@ -168,12 +168,20 @@ serial_ard_mouse_wheel(int16_t x_delta, int16_t y_delta)
 	return serial_sendmsg(&(struct serial_msg){ "MWHL", x_delta, y_delta });
 }
 
-int serial_ard_key_down(uint16_t id, uint16_t mods, uint16_t phys_id)
+int
+serial_ard_key_down(uint16_t id)
 {
-	return serial_sendmsg(&(struct serial_msg){ "KBDN", id, mods });
+	return serial_sendmsg(&(struct serial_msg){ "KBDN", id });
 }
 
-int serial_ard_key_up(uint16_t id, uint16_t mods, uint16_t phys_id)
+int
+serial_ard_key_up(uint16_t id)
 {
-	return serial_sendmsg(&(struct serial_msg){ "KBUP", id, mods });
+	return serial_sendmsg(&(struct serial_msg){ "KBUP", id });
+}
+
+int
+serial_ard_all_up(void)
+{
+	return serial_sendmsg(&(struct serial_msg){ "LEAV" });
 }
